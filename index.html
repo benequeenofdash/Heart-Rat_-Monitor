@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Heartbeat Monitor</title>
+    <link rel="stylesheet" href="https://pyscript.net/latest/pyscript.css">
+    <script defer src="https://pyscript.net/latest/pyscript.js"></script>
+    <style>
+        :root {
+            --pink: #E54B4B;
+            --red: #e23535;
+            --maroon: #3C0919;
+            --dataBorder: #FFA987;
+            --containerBg: #F7EBE8;
+            --bg: #444140;
+            --alert-color: #FF6B6B;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background: var(--bg);
+            color: white;
+        }
+
+        #container {
+            background: var(--containerBg);
+            width: 280px;
+            height: 550px;
+            margin: 20px auto;
+            text-align: center;
+            border-radius: 20px;
+            padding: 20px;
+        }
+
+        button {
+            cursor: pointer;
+            border: none;
+            border-radius: 5px;
+            margin: 0px 20px;
+            padding: 15px 30px;
+            color: var(--containerBg);
+        }
+
+        #reset {
+            background-color: var(--pink);
+        }
+
+        #stop {
+            background-color: var(--maroon);
+        }
+
+        #milliseconds,
+        #bps,
+        #tapper,
+        #alert,
+        #trends {
+            padding: 15px 0;
+            text-align: center;
+            text-decoration: none;
+            font-size: 16px;
+            margin: 0 -2px 20px;
+            width: 100%;
+            background: white;
+            border: 2px solid var(--dataBorder);
+            position: relative;
+            border-radius: 10px;
+            color: black;
+        }
+
+        #tapper {
+            border: 2px solid var(--pink);
+            height: 220px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #heart {
+            color: var(--pink);
+            user-select: none;
+            transition: transform 0.1s ease;
+        }
+
+        #heart.beat {
+            color: var(--red);
+            transform: scale(1.20);
+        }
+
+        .text {
+            padding: 20px;
+            text-align: center;
+        }
+
+        #alert {
+            color: var(--alert-color);
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+<div id="container">
+    <div id="tapper" class="hits">
+        <h1><div id="heart"><i class="material-icons">❤</i></div></h1>
+        <div class="text laptop">Tap or click the heart in sync with your heartbeat to reveal historical trends. Keep going for about 1 minute, and the trends will appear!</div>
+    </div>
+    <div id="milliseconds" class="hits">Seconds:
+        <span id="millisecondNum">0</span>
+    </div>
+    <div id="bps" class="hits">Heartrate:
+        <span id="bpsNum">0</span> bpm
+    </div>
+    <div id="alert"></div>
+    <div id="trends" class="hits">Historical Trends:
+        <span id="trendsNum">[]</span>
+    </div>
+    <button id="stop">Stop</button>
+    <button id="reset">Reset</button>
+</div>
+
+<py-script>
+    from pyscript import Element
+    import time
+
+    class HeartMonitor:
+        def __init__(self):
+            self.timer_started = False
+            self.start_time = 0
+            self.counting_time = 0
+            self.beat_count = 0
+            self.heart_rate_history = []
+            self.alert_threshold = 100  # Set threshold for heart rate alert
+            self.last_record_time = 0  # To track when the last average BPM was recorded
+            self.init_handlers()
+
+        def init_handlers(self):
+            Element("tapper").element.onclick = self.count_beats
+            Element("reset").element.onclick = self.reset_monitor
+            Element("stop").element.onclick = self.stop_monitor
+
+        def stop_monitor(self, event):
+            self.timer_started = False
+            js_stop_monitor()
+
+        def reset_monitor(self, event):
+            self.timer_started = False
+            self.beat_count = 0
+            self.counting_time = 0
+            self.last_record_time = 0  # Reset last record time
+            self.heart_rate_history.clear()  # Clear heart rate history
+            self.update_display()
+            js_reset_monitor()
+
+        def count_beats(self, event):
+            self.beat_count += 1
+
+            if not self.timer_started:
+                self.timer_started = True
+                self.start_time = time.time()
+                js_start_timer()
+
+            self.update_display()
+
+        def update_display(self):
+            self.counting_time = time.time() - self.start_time  # Calculate counting time in seconds
+
+            if self.counting_time > 0:
+                heart_rate = int(self.beat_count * 60 / self.counting_time)
+                Element("bpsNum").element.innerHTML = str(heart_rate)
+
+                # Record average heart rate every 60 seconds
+                if self.counting_time - self.last_record_time >= 60:
+                    average_bpm = int(self.beat_count * 60 / 60)  # Average BPM over the last 60 seconds
+                    self.heart_rate_history.append(average_bpm)
+                    self.last_record_time = self.counting_time  # Update last record time
+                    self.update_trends(average_bpm)
+
+        def update_trends(self, heart_rate):
+            if len(self.heart_rate_history) > 5:  # Keep last 5 records
+                self.heart_rate_history.pop(0)
+            Element("trendsNum").element.innerHTML = str(self.heart_rate_history)
+
+    monitor = HeartMonitor()
+</py-script>
+
+<script>
+    let timerInterval;
+    let beatCount = 0;
+    let startTime;
+    let countingTime = 0;
+    const alertThreshold = 100;
+
+    document.getElementById('tapper').addEventListener('click', countBeats);
+    document.getElementById('reset').addEventListener('click', resetMonitor);
+    document.getElementById('stop').addEventListener('click', stopMonitor);
+
+    function countBeats() {
+        beatCount++;
+        document.getElementById('heart').classList.add('beat');
+        setTimeout(() => {
+            document.getElementById('heart').classList.remove('beat');
+        }, 100);
+
+        if (!startTime) {
+            startTime = Date.now();
+            timerInterval = setInterval(updateCountingTime, 100);
+        }
+        updateDisplay();
+    }
+
+    function updateCountingTime() {
+        countingTime = (Date.now() - startTime) / 1000; // in seconds
+        document.getElementById('millisecondNum').textContent = countingTime.toFixed(2);
+        updateDisplay();
+    }
+
+    function updateDisplay() {
+        if (countingTime > 0) {
+            let heartRate = Math.floor((beatCount * 60) / countingTime);
+            document.getElementById('bpsNum').textContent = heartRate;
+
+            if (heartRate > alertThreshold) {
+                document.getElementById('alert').textContent = "High Heart Rate Alert!";
+            } else {
+                document.getElementById('alert').textContent = "";
+            }
+
+            monitor.update_display(); // Call the PyScript method to update trends
+        }
+    }
+
+    function stopMonitor() {
+        clearInterval(timerInterval);
+        startTime = null;
+        beatCount = 0;
+        countingTime = 0;
+        document.getElementById('millisecondNum').textContent = '0';
+        document.getElementById('bpsNum').textContent = '0';
+        document.getElementById('alert').textContent = '';
+        document.getElementById('trendsNum').textContent = '[]';
+    }
+
+    function resetMonitor() {
+        clearInterval(timerInterval);
+        startTime = null;
+        beatCount = 0;
+        countingTime = 0;
+        document.getElementById('millisecondNum').textContent = '0';
+        document.getElementById('bpsNum').textContent = '0';
+        document.getElementById('alert').textContent = '';
+        document.getElementById('trendsNum').textContent = '[]';
+        monitor.reset_monitor(); // Call the PyScript method to reset the monitor
+    }
+</script>
+
+</body>
+</html>
