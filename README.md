@@ -1,1 +1,1 @@
-# Heart-Rat_-Monitor
+# Heart-Rate_-Monitor
